@@ -1,85 +1,86 @@
 .data
-    prompt1: .asciiz "Ingrese un numero decimal: "
-    prompt2: .asciiz "Ingrese un numero binario de 8 bits: "
-    prompt3: .asciiz "El numero binario es: "
-    prompt4: .asciiz "El numero decimal es: "
-    prompt5: .asciiz "Opcion no valida.\n"
-    prompt6: .asciiz "Numero aleatorio en decimal: "
+    menu: .asciiz "\nMenu:\n1. Convertir Decimal a Binario\n2. Convertir Binario a Decimal\n3. Generar un numero aleatorio\n4. Salir\nSeleccione una opcion: "
+    prompt1: .asciiz "\nIngrese un numero decimal: "
+    prompt2: .asciiz "\nIngrese un numero binario de 8 bits: "
+    prompt3: .asciiz "\nEl numero binario es: "
+    prompt4: .asciiz "\nEl numero decimal es: "
+    prompt5: .asciiz "\nOpcion no valida. Intente de nuevo.\n"
+    prompt6: .asciiz "\nNumero aleatorio en decimal: "
     newline: .asciiz "\n"
-    binary: .space 9  # Espacio para almacenar un binario de 8 bits
-    random_num: .word 0
-    invalid_input: .asciiz "Entrada invalida. Intente nuevamente.\n"
+    binary: .space 8  # Espacio para los 8 bits del número binario
+    invalid_input: .asciiz "\nEntrada invalida. Intente nuevamente.\n"
 .text
     .globl main
 
 main:
-    # Mostrar menú
+    # Mostrar menú y leer opción del usuario
     li $v0, 4
-    la $a0, prompt1  # "Elija una opcion"
+    la $a0, menu
     syscall
 
-menu:
-    # Mostrar el menú
-    li $v0, 4
-    la $a0, prompt1  # "Elija una opción"
-    syscall
     li $v0, 5  # Leer entero
     syscall
-    move $t0, $v0  # Almacenar la opción
+    move $t0, $v0  # Guardar la opción en $t0
 
-    # Si la opción es 1 (Decimal a Binario)
+    # Opciones del menú
     beq $t0, 1, decimal_a_binario
-
-    # Si la opción es 2 (Binario a Decimal)
     beq $t0, 2, binario_a_decimal
-
-    # Si la opción es 3 (Generar número aleatorio)
     beq $t0, 3, generar_aleatorio
+    beq $t0, 4, salir
 
-    # Si no es ninguna opción válida
+    # Opción no válida
     li $v0, 4
     la $a0, prompt5
     syscall
-    j menu
+    j main  # Volver a mostrar el menú
 
 decimal_a_binario:
     # Solicitar número decimal
     li $v0, 4
     la $a0, prompt1
     syscall
-    li $v0, 5  # Leer entero
+
+    li $v0, 5  # Leer número decimal
     syscall
-    move $t1, $v0  # Almacenar el número decimal
+    move $t1, $v0  # Guardar el número decimal en $t1
 
-    # Convertir a binario y mostrar
-    li $t2, 0  # Contador para bits
-    li $t3, 0  # Usado para almacenar el bit
+    # Convertir decimal a binario
+    la $t2, binary  # Dirección base para almacenar los bits
+    li $t3, 8       # Contador para 8 bits
 
-decimal_to_bin_loop:
-    div $t1, $t1, 2  # Dividir entre 2
-    mfhi $t3  # Obtener el residuo (bit)
-    addi $t2, $t2, 1
-    # Guardar el bit
-    sw $t3, binary($t2)
+dec_to_bin_loop:
+    beqz $t3, print_binary  # Si el contador llega a 0, terminar
+    sub $t3, $t3, 1         # Decrementar el contador
+    rem $t4, $t1, 2         # Obtener el bit menos significativo
+    sb $t4, 0($t2)          # Guardar el bit en la posición actual
+    div $t1, $t1, 2         # Dividir el número entre 2
+    addi $t2, $t2, 1        # Avanzar al siguiente byte
+    j dec_to_bin_loop
 
-    # Repetir hasta que el número sea 0
-    bnez $t1, decimal_to_bin_loop
-
-    # Imprimir el número binario
+print_binary:
+    # Mostrar resultado binario
     li $v0, 4
     la $a0, prompt3
     syscall
 
-    # Imprimir el binario (invertido)
-    li $t2, 7  # Imprimir los 8 bits
-    print_bin:
-        lw $t3, binary($t2)
-        li $v0, 1
-        move $a0, $t3
-        syscall
-        sub $t2, $t2, 1
-        bgez $t2, print_bin
-    j menu
+    la $t2, binary
+    li $t3, 8
+print_binary_loop:
+    beqz $t3, finish_binary
+    lb $t4, 0($t2)
+    addi $t4, $t4, 48  # Convertir a carácter ASCII ('0' o '1')
+    li $v0, 11
+    move $a0, $t4
+    syscall
+    addi $t2, $t2, 1
+    subi $t3, $t3, 1
+    j print_binary_loop
+
+finish_binary:
+    li $v0, 4
+    la $a0, newline
+    syscall
+    j main
 
 binario_a_decimal:
     # Solicitar número binario
@@ -90,73 +91,81 @@ binario_a_decimal:
     la $a0, binary
     syscall
 
-    # Validar que el binario tenga exactamente 8 bits
-    li $t2, 0  # Contador de caracteres leídos
-    li $t3, 8  # Límite de 8 bits
-    validate_bin:
-        lb $t4, binary($t2)  # Cargar el carácter binario
-        beqz $t4, end_of_string  # Si llegamos al final de la cadena, salir
-        li $t5, 48  # '0' en ASCII
-        li $t6, 49  # '1' en ASCII
-        beq $t4, $t5, valid_char
-        beq $t4, $t6, valid_char
-        li $v0, 4
-        la $a0, invalid_input  # Mensaje de entrada inválida
-        syscall
-        j binario_a_decimal  # Volver a pedir entrada
-
-    valid_char:
-        addi $t2, $t2, 1  # Incrementar el contador de caracteres
-        bne $t2, $t3, validate_bin  # Continuar validando hasta 8 bits
-
-    # Imprimir mensaje de validación exitosa y convertir a decimal
-    li $v0, 4
-    la $a0, prompt4
-    syscall
-
-    # Convertir binario a decimal
-    li $t1, 0  # Decimal resultante
-    li $t2, 0  # Contador de posición
-    li $t3, 8  # Asumimos 8 bits
+    # Convertir cadena binaria a número decimal
+    la $t2, binary  # Dirección base del array de bits
+    li $t1, 0       # Resultado decimal inicializado en 0
+    li $t3, 8       # Contador para 8 bits
 
 bin_to_dec_loop:
-    lb $t4, binary($t2)  # Cargar el carácter binario
-    beqz $t4, end_of_string
-    li $t5, 48  # '0' en ASCII
-    li $t6, 49  # '1' en ASCII
-    sub $t4, $t4, $t5  # Convertir '0'/'1' a 0/1
-    mul $t1, $t1, 2  # Multiplicar por 2 (shifting)
-    add $t1, $t1, $t4  # Sumar el bit
-    addi $t2, $t2, 1
-    bne $t2, $t3, bin_to_dec_loop
+    beqz $t3, print_decimal  # Si el contador llega a 0, terminar
+    lb $t4, 0($t2)           # Leer un carácter (byte) de la cadena
+    sub $t4, $t4, 48         # Convertir de ASCII a valor numérico ('0' o '1')
+    bltz $t4, invalid_bin    # Si el valor es negativo, entrada inválida
+    bgt $t4, 1, invalid_bin  # Si el valor es mayor a 1, entrada inválida
+    mul $t1, $t1, 2          # Desplazar a la izquierda (multiplicar por 2)
+    add $t1, $t1, $t4        # Sumar el bit actual
+    addi $t2, $t2, 1         # Avanzar al siguiente carácter
+    addi $t3, $t3, -1        # Decrementar el contador
+    j bin_to_dec_loop
 
-end_of_string:
+add_bit:
+    mul $t1, $t1, 2  # Desplazar a la izquierda (multiplicar por 2)
+    addi $t1, $t1, 1  # Sumar 1
+    j continue_loop
+
+skip_bit:
+    mul $t1, $t1, 2  # Desplazar a la izquierda (multiplicar por 2)
+
+continue_loop:
+    addi $t2, $t2, 1  # Avanzar al siguiente carácter
+    addi $t3, $t3, -1 # Decrementar el contador
+    b bin_to_dec_loop
+
+print_decimal:
+    # Mostrar resultado decimal
     li $v0, 4
     la $a0, prompt4
     syscall
-
     li $v0, 1
     move $a0, $t1
     syscall
-    j menu
+    j main  # Volver al menú
+
+invalid_bin:
+    li $v0, 4
+    la $a0, invalid_input
+    syscall
+    j main  # Volver al menú
 
 generar_aleatorio:
-    li $v0, 42  # Función para generar número aleatorio
-    li $a0, 10  # Límite inferior
-    li $a1, 50  # Límite superior
+    # Generar número aleatorio entre 10 y 50
+    li $v0, 42  # Syscall para random
     syscall
-    move $t1, $v0  # Número aleatorio
+    li $t1, 41
+    rem $t1, $v0, $t1
+    addi $t1, $t1, 10
+
+    # Mostrar el número aleatorio
     li $v0, 4
     la $a0, prompt6
     syscall
-
-    # Mostrar el número aleatorio en decimal
     li $v0, 1
     move $a0, $t1
     syscall
 
-    # Mostrar el número aleatorio en binario
-    li $t2, 0
-    jal decimal_a_binario  # Llamada a la función de decimal a binario
+    # Convertir el número aleatorio a binario
+    la $t2, binary  # Dirección base para almacenar los bits
+    li $t3, 8       # Contador para 8 bits
 
-    j menu
+rand_to_bin_loop:
+    beqz $t3, print_binary  # Si el contador llega a 0, terminar
+    sub $t3, $t3, 1         # Decrementar el contador
+    rem $t4, $t1, 2         # Obtener el bit menos significativo
+    sb $t4, 0($t2)          # Guardar el bit en la posición actual
+    div $t1, $t1, 2         # Dividir el número entre 2
+    addi $t2, $t2, 1        # Avanzar al siguiente byte
+    j rand_to_bin_loop
+
+salir:
+    li $v0, 10  # Syscall para terminar el programa
+    syscall
