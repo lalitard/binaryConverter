@@ -45,8 +45,9 @@ decimal_a_binario:
     move $t1, $v0  # Guardar el número decimal en $t1
 
     # Convertir decimal a binario
-    la $t2, binary  # Dirección base para almacenar los bits
-    li $t3, 8       # Contador para 8 bits
+    la $t2, binary          # Dirección base para almacenar los bits
+    addi $t2, $t2, 7        # Apuntar al último byte del array (8 bits - 1)
+    li $t3, 8               # Contador para 8 bits
 
 dec_to_bin_loop:
     beqz $t3, print_binary  # Si el contador llega a 0, terminar
@@ -54,7 +55,7 @@ dec_to_bin_loop:
     rem $t4, $t1, 2         # Obtener el bit menos significativo
     sb $t4, 0($t2)          # Guardar el bit en la posición actual
     div $t1, $t1, 2         # Dividir el número entre 2
-    addi $t2, $t2, 1        # Avanzar al siguiente byte
+    subi $t2, $t2, 1        # Retroceder al siguiente byte
     j dec_to_bin_loop
 
 print_binary:
@@ -87,15 +88,35 @@ binario_a_decimal:
     li $v0, 4
     la $a0, prompt2
     syscall
-    li $v0, 8  # Leer cadena de binario
+
+    # Leer cadena de binario
+    li $v0, 8  # Leer hasta 8 caracteres
     la $a0, binary
+    li $a1, 9  # Espacio para 8 caracteres + '\0'
     syscall
+
+    # Asegurar terminación de cadena
+    la $t2, binary
+    addi $t2, $t2, 8  # Posición del carácter 9
+    sb $zero, 0($t2)  # Escribir '\0'
+
+    # Validar longitud de la entrada
+    li $t3, 8  # Longitud esperada
+    la $t2, binary
+    li $t4, 0
+validate_length:
+    lb $t5, 0($t2)  # Leer un carácter
+    beqz $t5, validate_end  # Si es '\0', salir
+    addi $t4, $t4, 1
+    addi $t2, $t2, 1
+    j validate_length
+validate_end:
+    bne $t4, $t3, invalid_bin  # Si la longitud no es 8, error
 
     # Convertir cadena binaria a número decimal
     la $t2, binary  # Dirección base del array de bits
     li $t1, 0       # Resultado decimal inicializado en 0
     li $t3, 8       # Contador para 8 bits
-
 bin_to_dec_loop:
     beqz $t3, print_decimal  # Si el contador llega a 0, terminar
     lb $t4, 0($t2)           # Leer un carácter (byte) de la cadena
@@ -105,7 +126,7 @@ bin_to_dec_loop:
     mul $t1, $t1, 2          # Desplazar a la izquierda (multiplicar por 2)
     add $t1, $t1, $t4        # Sumar el bit actual
     addi $t2, $t2, 1         # Avanzar al siguiente carácter
-    addi $t3, $t3, -1        # Decrementar el contador
+    subi $t3, $t3, 1         # Decrementar el contador
     j bin_to_dec_loop
 
 add_bit:
@@ -138,22 +159,33 @@ invalid_bin:
     j main  # Volver al menú
 
 generar_aleatorio:
-    # Generar número aleatorio entre 10 y 50
-    li $v0, 42  # Syscall para random
+    # Inicializar la semilla con el tiempo actual
+    li $v0, 30      # Syscall para obtener el tiempo en milisegundos
     syscall
-    li $t1, 41
-    rem $t1, $v0, $t1
-    addi $t1, $t1, 10
+    move $a1, $v0   # Usar el tiempo como semilla
+    li $v0, 43      # Syscall para inicializar la semilla del generador aleatorio
+    syscall
 
-    # Mostrar el número aleatorio
+    # Generar un número aleatorio
+    li $v0, 42      # Syscall para random
+    syscall
+    move $t0, $v0   # Guardar el número aleatorio generado
+
+    # Asegurar que esté en el rango [10, 50]
+    li $t1, 41      # Rango (50 - 10 + 1)
+    rem $t0, $t0, $t1  # $t0 = $t0 % 41
+    addi $t0, $t0, 10  # Desplazar al rango 10 - 50
+
+    # Mostrar el número aleatorio en decimal
     li $v0, 4
     la $a0, prompt6
     syscall
     li $v0, 1
-    move $a0, $t1
+    move $a0, $t0
     syscall
 
     # Convertir el número aleatorio a binario
+    move $t1, $t0   # Copiar el número para convertirlo
     la $t2, binary  # Dirección base para almacenar los bits
     li $t3, 8       # Contador para 8 bits
 
@@ -165,6 +197,7 @@ rand_to_bin_loop:
     div $t1, $t1, 2         # Dividir el número entre 2
     addi $t2, $t2, 1        # Avanzar al siguiente byte
     j rand_to_bin_loop
+
 
 salir:
     li $v0, 10  # Syscall para terminar el programa
